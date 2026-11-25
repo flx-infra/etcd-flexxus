@@ -1,0 +1,84 @@
+# etcd compartido del Swarm: registro de Patroni para todas las celdas PostgreSQL.
+# Cada celda usa su propio scope de Patroni (celda-01, celda-02...) sobre este mismo cluster.
+# Las celdas se conectan por la red externa etcd-net y llegan a etcd-a:2379, etcd-b:2379, etcd-c:2379.
+
+x-etcd: &etcd
+  image: quay.io/coreos/etcd:v3.5.17
+  networks: [etcd-net]
+  healthcheck:
+    test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "endpoint", "health"]
+    interval: 10s
+    timeout: 5s
+    retries: 3
+
+services:
+  etcd-a:
+    <<: *etcd
+    command:
+      - etcd
+      - --name=etcd-a
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd-a:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd-a:2380
+      - --initial-cluster=etcd-a=http://etcd-a:2380,etcd-b=http://etcd-b:2380,etcd-c=http://etcd-c:2380
+      - --initial-cluster-state=new
+      - --initial-cluster-token=etcd-flexxus
+      - --auto-compaction-mode=periodic
+      - --auto-compaction-retention=1h
+    volumes: [etcd-a-data:/etcd-data]
+    deploy:
+      placement: { constraints: ["node.hostname == ${ETCD_NODE_A:-manager01}"] }
+      restart_policy: { condition: any }
+
+  etcd-b:
+    <<: *etcd
+    command:
+      - etcd
+      - --name=etcd-b
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd-b:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd-b:2380
+      - --initial-cluster=etcd-a=http://etcd-a:2380,etcd-b=http://etcd-b:2380,etcd-c=http://etcd-c:2380
+      - --initial-cluster-state=new
+      - --initial-cluster-token=etcd-flexxus
+      - --auto-compaction-mode=periodic
+      - --auto-compaction-retention=1h
+    volumes: [etcd-b-data:/etcd-data]
+    deploy:
+      placement: { constraints: ["node.hostname == ${ETCD_NODE_B:-worker1}"] }
+      restart_policy: { condition: any }
+
+  etcd-c:
+    <<: *etcd
+    command:
+      - etcd
+      - --name=etcd-c
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd-c:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd-c:2380
+      - --initial-cluster=etcd-a=http://etcd-a:2380,etcd-b=http://etcd-b:2380,etcd-c=http://etcd-c:2380
+      - --initial-cluster-state=new
+      - --initial-cluster-token=etcd-flexxus
+      - --auto-compaction-mode=periodic
+      - --auto-compaction-retention=1h
+    volumes: [etcd-c-data:/etcd-data]
+    deploy:
+      placement: { constraints: ["node.hostname == ${ETCD_NODE_C:-worker3}"] }
+      restart_policy: { condition: any }
+
+networks:
+  etcd-net:
+    driver: overlay
+    attachable: true
+    name: etcd-net
+
+volumes:
+  etcd-a-data:
+  etcd-b-data:
+  etcd-c-data:
